@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>晚宴報到掃描 Dinner Check-in</title>
+<style>
+  :root{
+    --background-color:#0b5394;
+    --accent-color:#f6b26b;
+    --contrast-color:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+       margin:0;background:var(--background-color);color:var(--contrast-color);text-align:center}
+  header{padding:18px 12px 14px;border-bottom:2px solid var(--accent-color)}
+  .logo{display:flex;align-items:center;justify-content:center;gap:10px}
+  /* 想換正式 logo：把整個 <svg> 換成 <img src="圖片網址" style="height:40px">（建議白色/透明背景）*/
+  .logo svg{height:40px;width:auto}
+  .titles{margin-top:8px}
+  .titles .zh{font-size:18px;font-weight:700;display:block}
+  .titles .en{font-size:12px;font-weight:400;opacity:.8;display:block;letter-spacing:.5px}
+  #reader{width:100%;max-width:480px;margin:14px auto 0}
+  #result{padding:28px 16px;margin:14px auto 0;max-width:480px;border-radius:14px;
+          font-size:20px;min-height:120px;background:rgba(255,255,255,.10);transition:background .15s}
+  #result.ok {background:#15803d}
+  #result.dup{background:#b45309}
+  #result.err{background:#b91c1c}
+  .name{font-size:34px;font-weight:700;margin:8px 0 2px}
+  .sub {font-size:20px;font-weight:500;opacity:.92;margin-bottom:6px}
+  .small{font-size:14px;opacity:.85}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <!-- ↓↓↓ 預設文字 LOGO（白色），要換正式 logo 就替換這個 <svg> ↓↓↓ -->
+      <img src="https://tswim2026.ctm.nthu.edu.tw/assets/img/tswim-logo-white-transparent.png" style="height:40px">
+      <!-- ↑↑↑ -->
+    </div>
+    <div class="titles">
+      <span class="zh">晚宴報到掃描</span>
+      <span class="en">Dinner Check-in Scanner</span>
+    </div>
+  </header>
+
+  <div id="reader"></div>
+  <div id="result" class="">請對準參加者的 QR Code<br><span class="small">Point at the guest's QR code</span></div>
+
+<script>
+  /* ============ 請填入你的設定 ============ */
+  var WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbx52ZiNONG1arOWZA_74GEFeHjpI6FRL66oyzE8iub9jXfcfRTHm0_4Zqsp4i8KQkHs7Q/exec' //'貼上你的_Apps_Script_網址_以_exec_結尾';
+  var APP_KEY    = 'fdjfSDdsfjfkj32_xyz789';  // 要跟 Code.gs 裡的 APP_KEY 一模一樣
+  /* ====================================== */
+
+  var lastToken = '', cooldown = false, busy = false;
+  var resultEl = document.getElementById('result');
+
+  function beep(freq){
+    try{
+      var c = new (window.AudioContext || window.webkitAudioContext)();
+      var o = c.createOscillator(), g = c.createGain();
+      o.connect(g); g.connect(c.destination);
+      o.frequency.value = freq; o.start();
+      g.gain.setValueAtTime(0.2, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.15);
+      o.stop(c.currentTime + 0.15);
+    }catch(e){}
+  }
+  function show(cls, html){ resultEl.className = cls; resultEl.innerHTML = html; }
+  function esc(s){
+    return String(s || '').replace(/[&<>"]/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+    });
+  }
+  function nameBlock(res){
+    var zh = (res.nameZH || '').trim(), en = (res.nameEN || '').trim();
+    if (!zh && !en) return '<div class="name">(無姓名)</div>';
+    var big = zh || en, sub = (zh && en) ? en : '';
+    var html = '<div class="name">' + esc(big) + '</div>';
+    if (sub) html += '<div class="sub">' + esc(sub) + '</div>';
+    return html;
+  }
+
+  // 用 JSONP 呼叫 Apps Script，繞過跨網域限制
+  function jsonp(url, cb){
+    var name = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*100000);
+    var s = document.createElement('script');
+    var timer = setTimeout(function(){ done(null); }, 8000);
+    function done(data){
+      clearTimeout(timer);
+      try{ delete window[name]; }catch(e){ window[name] = undefined; }
+      if (s.parentNode) s.parentNode.removeChild(s);
+      cb(data);
+    }
+    window[name] = function(data){ done(data); };
+    s.onerror = function(){ done(null); };
+    s.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'callback=' + name;
+    document.body.appendChild(s);
+  }
+
+  function onScan(token){
+    if (busy) return;
+    if (token === lastToken && cooldown) return;
+    busy = true; lastToken = token; cooldown = true;
+    setTimeout(function(){ cooldown = false; }, 2500);
+
+    show('', '處理中…');
+    var url = WEBAPP_URL
+      + '?key='   + encodeURIComponent(APP_KEY)
+      + '&token=' + encodeURIComponent(token);
+
+    jsonp(url, function(res){
+      busy = false;
+      if (!res){ beep(220); show('err', '✕ 連線失敗，請再掃一次<div class="small">Connection failed, scan again</div>'); return; }
+      if (!res.ok){ beep(220); show('err', '✕ ' + (res.msg || '錯誤') + '<div class="small">Invalid / not found</div>'); return; }
+      if (res.already){
+        beep(440);
+        show('dup', '⚠ 重複報到 Already checked in' + nameBlock(res) + '<div class="small">' + esc(res.time) + '</div>');
+        return;
+      }
+      beep(880);
+      show('ok', '✓ 報到成功 Checked in' + nameBlock(res) + '<div class="small">' + esc(res.time) + '</div>');
+    });
+  }
+
+  var scanner = new Html5Qrcode("reader");
+  scanner.start(
+    { facingMode: "environment" },
+    { fps: 15, qrbox: 250 },
+    onScan,
+    function(){}
+  ).catch(function(e){ show('err', '無法啟用相機：' + e); });
+</script>
+</body>
+</html>
