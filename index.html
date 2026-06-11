@@ -256,10 +256,23 @@
     });
   }
 
-  var scanner = new Html5Qrcode("reader");
+  // 用瀏覽器原生 BarcodeDetector（若支援）大幅加快辨識速度
+  var scanner = new Html5Qrcode("reader", {
+    useBarCodeDetectorIfSupported: true,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  });
   scanner.start(
     { facingMode: "environment" },
-    { fps: 15, qrbox: 250 },
+    {
+      fps: 25,                       // 提高取樣率，更快抓到 QR
+      qrbox: 280,
+      aspectRatio: 1.0,
+      videoConstraints: {
+        facingMode: "environment",
+        width:  { ideal: 1280 },
+        height: { ideal: 720 }       // 720p 是多數手機辨識速度與清晰度的甜蜜點
+      }
+    },
     onScan,
     function(){}
   ).catch(function(e){ show('err', '無法啟用相機：' + e); });
