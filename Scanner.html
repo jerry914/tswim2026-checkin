@@ -1,65 +1,186 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>晚宴報到掃描 Dinner Check-in</title>
 <style>
   :root{
-    --background-color:#0b5394;
-    --accent-color:#f6b26b;
-    --contrast-color:#ffffff;
+    --bg-1:#072a4d;
+    --bg-2:#0b5394;
+    --accent:#f6b26b;
+    --accent-2:#ffce99;
+    --white:#ffffff;
+    --ok:#16a34a;
+    --dup:#d97706;
+    --err:#dc2626;
+    --card:rgba(255,255,255,.08);
+    --card-border:rgba(255,255,255,.16);
+    --radius:18px;
+    --shadow:0 18px 48px rgba(0,0,0,.38);
   }
   *{box-sizing:border-box}
-  body{font-family:system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
-       margin:0;background:var(--background-color);color:var(--contrast-color);text-align:center}
-  header{padding:18px 12px 14px;border-bottom:2px solid var(--accent-color)}
+  html,body{height:100%}
+  body{
+    font-family:"Inter",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+    margin:0;color:var(--white);text-align:center;
+    background:radial-gradient(120% 90% at 50% 0%,var(--bg-2) 0%,var(--bg-1) 70%) fixed;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- Header ---------- */
+  header{padding:26px 16px 20px}
   .logo{display:flex;align-items:center;justify-content:center;gap:10px}
-  /* 想換正式 logo：把整個 <svg> 換成 <img src="圖片網址" style="height:40px">（建議白色/透明背景）*/
-  .logo svg{height:40px;width:auto}
-  .titles{margin-top:8px}
-  .titles .zh{font-size:18px;font-weight:700;display:block}
-  .titles .en{font-size:12px;font-weight:400;opacity:.8;display:block;letter-spacing:.5px}
-  #reader{width:100%;max-width:480px;margin:14px auto 0}
-  #result{padding:28px 16px;margin:14px auto 0;max-width:480px;border-radius:14px;
-          font-size:20px;min-height:120px;background:rgba(255,255,255,.10);transition:background .15s}
-  #result.ok {background:#15803d}
-  #result.dup{background:#b45309}
-  #result.err{background:#b91c1c}
-  .name{font-size:34px;font-weight:700;margin:8px 0 2px}
-  .sub {font-size:20px;font-weight:500;opacity:.92;margin-bottom:6px}
-  .small{font-size:14px;opacity:.85}
+  .logo img{height:42px;width:auto;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3))}
+  .titles{margin-top:14px}
+  .titles .zh{font-size:22px;font-weight:700;letter-spacing:1px;display:block}
+  .titles .en{font-size:12px;font-weight:400;opacity:.72;display:block;letter-spacing:2px;text-transform:uppercase;margin-top:4px}
+  .accent-line{width:54px;height:3px;margin:16px auto 0;border-radius:99px;
+    background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+
+  /* ---------- Scanner card ---------- */
+  .stage{max-width:480px;margin:0 auto;padding:0 16px 40px}
+  .scanner-card{
+    margin-top:22px;padding:14px;border-radius:var(--radius);
+    background:var(--card);border:1px solid var(--card-border);
+    box-shadow:var(--shadow);backdrop-filter:blur(8px)}
+  #reader{width:100%;border-radius:12px;overflow:hidden}
+  #reader video{border-radius:12px}
+
+  /* ---------- Status strip ---------- */
+  #result{
+    margin-top:18px;padding:22px 18px;border-radius:var(--radius);
+    font-size:18px;line-height:1.5;min-height:96px;
+    display:flex;flex-direction:column;justify-content:center;
+    background:var(--card);border:1px solid var(--card-border);
+    box-shadow:var(--shadow);transition:background .2s,border-color .2s}
+  #result.ok {background:rgba(22,163,74,.22);border-color:rgba(22,163,74,.55)}
+  #result.dup{background:rgba(217,119,6,.22);border-color:rgba(217,119,6,.55)}
+  #result.err{background:rgba(220,38,38,.22);border-color:rgba(220,38,38,.55)}
+  .name{font-size:30px;font-weight:700;margin:6px 0 2px}
+  .sub {font-size:18px;font-weight:500;opacity:.92;margin-bottom:4px}
+  .small{font-size:13px;opacity:.78;letter-spacing:.3px}
+
+  /* ---------- Confirmation popup ---------- */
+  .overlay{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    padding:24px;background:rgba(4,18,34,.62);backdrop-filter:blur(6px);
+    opacity:0;visibility:hidden;transition:opacity .22s,visibility .22s;z-index:50}
+  .overlay.show{opacity:1;visibility:visible}
+  .popup{
+    width:100%;max-width:360px;padding:34px 26px 26px;border-radius:24px;
+    background:linear-gradient(180deg,#ffffff 0%,#f4f7fb 100%);color:#0b2540;
+    box-shadow:0 28px 70px rgba(0,0,0,.5);text-align:center;
+    transform:translateY(18px) scale(.94);opacity:0;transition:transform .26s cubic-bezier(.2,.9,.3,1.3),opacity .26s}
+  .overlay.show .popup{transform:translateY(0) scale(1);opacity:1}
+
+  .badge{
+    width:84px;height:84px;margin:0 auto 18px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:44px;color:#fff;box-shadow:0 10px 26px rgba(0,0,0,.22)}
+  .popup.ok  .badge{background:linear-gradient(135deg,#22c55e,#15803d)}
+  .popup.dup .badge{background:linear-gradient(135deg,#f59e0b,#b45309)}
+  .popup .badge{animation:pop .4s cubic-bezier(.2,.9,.3,1.4)}
+  @keyframes pop{0%{transform:scale(0)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+
+  .popup .status-zh{font-size:20px;font-weight:700;letter-spacing:.5px}
+  .popup .status-en{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:2px;opacity:.55;margin-top:2px}
+  .popup.ok  .status-zh{color:#15803d}
+  .popup.dup .status-zh{color:#b45309}
+  .popup .p-name{font-size:30px;font-weight:800;margin:18px 0 2px;color:#0b2540}
+  .popup .p-sub{font-size:17px;font-weight:500;color:#3a5573}
+  .popup .p-time{margin-top:14px;font-size:13px;color:#6b7d92;
+    background:#eef2f7;display:inline-block;padding:6px 14px;border-radius:99px}
+  .popup .p-btn{
+    margin-top:26px;width:100%;padding:14px;border:0;border-radius:14px;cursor:pointer;
+    font-size:16px;font-weight:700;color:#fff;letter-spacing:.5px;
+    background:linear-gradient(135deg,var(--bg-2),var(--bg-1));
+    box-shadow:0 8px 20px rgba(11,83,148,.35);transition:transform .1s,filter .15s}
+  .popup .p-btn:hover{filter:brightness(1.08)}
+  .popup .p-btn:active{transform:scale(.97)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
   <header>
     <div class="logo">
-      <!-- ↓↓↓ 預設文字 LOGO（白色），要換正式 logo 就替換這個 <svg> ↓↓↓ -->
-      <img src="https://tswim2026.ctm.nthu.edu.tw/assets/img/tswim-logo-white-transparent.png" style="height:40px">
-      <!-- ↑↑↑ -->
+      <img src="https://tswim2026.ctm.nthu.edu.tw/assets/img/tswim-logo-white-transparent.png" alt="TSWIM">
     </div>
     <div class="titles">
       <span class="zh">晚宴報到掃描</span>
       <span class="en">Dinner Check-in Scanner</span>
     </div>
+    <div class="accent-line"></div>
   </header>
 
-  <div id="reader"></div>
-  <div id="result" class="">請對準參加者的 QR Code<br><span class="small">Point at the guest's QR code</span></div>
+  <div class="stage">
+    <div class="scanner-card">
+      <div id="reader"></div>
+    </div>
+    <div id="result" class="">請對準參加者的 QR Code<br><span class="small">Point at the guest's QR code</span></div>
+  </div>
+
+  <!-- 報到確認彈窗 Check-in confirmation popup -->
+  <div id="overlay" class="overlay" aria-hidden="true">
+    <div id="popup" class="popup ok" role="dialog" aria-modal="true">
+      <div class="badge" id="popupBadge">✓</div>
+      <div class="status-zh" id="popupStatusZh">報到成功</div>
+      <div class="status-en" id="popupStatusEn">Checked in</div>
+      <div class="p-name" id="popupName"></div>
+      <div class="p-sub" id="popupSub"></div>
+      <div class="p-time" id="popupTime"></div>
+      <button class="p-btn" id="popupBtn">繼續掃描 Continue</button>
+    </div>
+  </div>
 
 <script>
   /* ============ 請填入你的設定 ============ */
-  var WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwEyEv1OzZZP7Vnl1h2Ci5MyzirTVz7t9ar1iRND4ke4KSFbRXDoIyL2lGy-jufrxqc/exec' //'貼上你的_Apps_Script_網址_以_exec_結尾';
+  var WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwEyEv1OzZZP7Vnl1h2Ci5MyzirTVz7t9ar1iRND4ke4KSFbRXDoIyL2lGy-jufrxqc/exec';
   var APP_KEY    = 'fdjfSDdsfjfkj32_xyz789';  // 要跟 Code.gs 裡的 APP_KEY 一模一樣
   /* ====================================== */
 
-
-
-  https://script.google.com/macros/s/AKfycbx52ZiNONG1arOWZA_74GEFeHjpI6FRL66oyzE8iub9jXfcfRTHm0_4Zqsp4i8KQkHs7Q/exec?key=fdjfSDdsfjfkj32_xyz789&token=test123
-
   var lastToken = '', cooldown = false, busy = false;
   var resultEl = document.getElementById('result');
+
+  // popup elements
+  var overlayEl    = document.getElementById('overlay');
+  var popupEl      = document.getElementById('popup');
+  var popupBadge   = document.getElementById('popupBadge');
+  var popupStatusZh= document.getElementById('popupStatusZh');
+  var popupStatusEn= document.getElementById('popupStatusEn');
+  var popupName    = document.getElementById('popupName');
+  var popupSub     = document.getElementById('popupSub');
+  var popupTime    = document.getElementById('popupTime');
+  var popupBtn     = document.getElementById('popupBtn');
+  var popupTimer;
+
+  function closePopup(){
+    overlayEl.classList.remove('show');
+    overlayEl.setAttribute('aria-hidden', 'true');
+    clearTimeout(popupTimer);
+  }
+  popupBtn.addEventListener('click', closePopup);
+  overlayEl.addEventListener('click', function(e){ if (e.target === overlayEl) closePopup(); });
+
+  // type: 'ok' | 'dup'
+  function showPopup(type, res){
+    var names = splitNames(res);
+    popupEl.className = 'popup ' + type;
+    popupBadge.textContent   = type === 'dup' ? '⚠' : '✓';
+    popupStatusZh.textContent= type === 'dup' ? '重複報到' : '報到成功';
+    popupStatusEn.textContent= type === 'dup' ? 'Already checked in' : 'Checked in';
+    popupName.textContent    = names.big || '(無姓名)';
+    popupSub.textContent     = names.sub;
+    popupSub.style.display   = names.sub ? 'block' : 'none';
+    popupTime.textContent    = res.time || '';
+    popupTime.style.display  = res.time ? 'inline-block' : 'none';
+
+    overlayEl.classList.add('show');
+    overlayEl.setAttribute('aria-hidden', 'false');
+    clearTimeout(popupTimer);
+    popupTimer = setTimeout(closePopup, 4000); // 自動關閉 auto-dismiss
+  }
 
   function beep(freq){
     try{
@@ -78,12 +199,16 @@
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
     });
   }
-  function nameBlock(res){
+  function splitNames(res){
     var zh = (res.nameZH || '').trim(), en = (res.nameEN || '').trim();
-    if (!zh && !en) return '<div class="name">(無姓名)</div>';
     var big = zh || en, sub = (zh && en) ? en : '';
-    var html = '<div class="name">' + esc(big) + '</div>';
-    if (sub) html += '<div class="sub">' + esc(sub) + '</div>';
+    return { big: big, sub: sub };
+  }
+  function nameBlock(res){
+    var n = splitNames(res);
+    if (!n.big) return '<div class="name">(無姓名)</div>';
+    var html = '<div class="name">' + esc(n.big) + '</div>';
+    if (n.sub) html += '<div class="sub">' + esc(n.sub) + '</div>';
     return html;
   }
 
@@ -110,7 +235,7 @@
     busy = true; lastToken = token; cooldown = true;
     setTimeout(function(){ cooldown = false; }, 2500);
 
-    show('', '處理中…');
+    show('', '處理中…<br><span class="small">Processing…</span>');
     var url = WEBAPP_URL
       + '?key='   + encodeURIComponent(APP_KEY)
       + '&token=' + encodeURIComponent(token);
@@ -122,10 +247,12 @@
       if (res.already){
         beep(440);
         show('dup', '⚠ 重複報到 Already checked in' + nameBlock(res) + '<div class="small">' + esc(res.time) + '</div>');
+        showPopup('dup', res);
         return;
       }
       beep(880);
       show('ok', '✓ 報到成功 Checked in' + nameBlock(res) + '<div class="small">' + esc(res.time) + '</div>');
+      showPopup('ok', res);
     });
   }
 
