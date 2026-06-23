@@ -237,8 +237,8 @@
 
     show('', '處理中…<br><span class="small">Processing…</span>');
     var url = WEBAPP_URL
-      + '?key='   + encodeURIComponent(APP_KEY)
-      + '&token=' + encodeURIComponent(token);
+      + '?key=' + encodeURIComponent(APP_KEY)
+      + '&id='  + encodeURIComponent(token);   // QR 內容即為 OrderID
 
     jsonp(url, function(res){
       busy = false;
